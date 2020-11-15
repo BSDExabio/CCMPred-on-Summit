@@ -1,0 +1,1 @@
+/sw/summit/gcc/6.4.0/bin/g++  CMakeFiles/sphere.dir/samples/sphere.c.o -o bin/sphere  -L/usr/lib/gcc/ppc64le-redhat-linux/4.8.5 libconjugrad.a  -L"/sw/summit/cuda/10.1.243/targets/ppc64le-linux/lib/stubs" -L"/sw/summit/cuda/10.1.243/targets/ppc64le-linux/lib" -lcudadevrt -lcudart_static -lrt -lpthread -ldl

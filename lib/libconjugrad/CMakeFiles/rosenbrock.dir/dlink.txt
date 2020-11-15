@@ -1,0 +1,1 @@
+/sw/summit/cuda/10.1.243/bin/nvcc   -Xcompiler=-fPIC -Wno-deprecated-gpu-targets -shared -dlink CMakeFiles/rosenbrock.dir/samples/rosenbrock.c.o -o CMakeFiles/rosenbrock.dir/cmake_device_link.o  -L/usr/lib/gcc/ppc64le-redhat-linux/4.8.5 libconjugrad.a 

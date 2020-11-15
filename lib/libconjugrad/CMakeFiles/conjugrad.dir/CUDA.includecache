@@ -1,0 +1,24 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/gpfs/alpine/scratch/mathit/gen119/CCMpred_orig/CCMpred/lib/libconjugrad/src/conjugrad_kernels.cu
+conjugrad_kernels.h
+/gpfs/alpine/scratch/mathit/gen119/CCMpred_orig/CCMpred/lib/libconjugrad/src/conjugrad_kernels.h
+cuda_runtime.h
+-
+stdio.h
+-
+
+lib/libconjugrad/include/conjugrad.h
+stdbool.h
+-
+
+lib/libconjugrad/include/conjugrad_kernels.h
+conjugrad.h
+lib/libconjugrad/include/conjugrad.h
+
