@@ -11,3 +11,11 @@ cmake -DWITH_OMP=off
 make
 
 ```
+
+**Run on Summit**
+
+```bash
+# Example
+jsrun -n 1 -a 1 -c 1 -b packed:1 -g 1 ./bin/ccmpred  ./example/2ID0A.aln out.mat
+
+```
