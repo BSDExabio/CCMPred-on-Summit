@@ -104,7 +104,7 @@ if(WITH_OMP)
 	find_package(OpenMP)
 endif(WITH_OMP)
 if(OPENMP_FOUND)
-	list(APPEND SOURCES src/evaluate_cpu_omp.c)
+#	list(APPEND SOURCES src/evaluate_cpu_omp.c)
 	add_definitions("-DOPENMP")
 endif(OPENMP_FOUND)
 

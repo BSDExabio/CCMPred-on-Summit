@@ -3,10 +3,117 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
+//#include <fstream>
 
 #include "conjugrad.h"
 
 #include "ccmpred.h"
+
+#define MAXSTRLENGTH 100
+
+/*
+// trim from start (in place)
+static inline void ltrim(std::string &s) {
+    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch) {
+        return !std::isspace(ch);
+    }));
+}
+
+// trim from end (in place)
+static inline void rtrim(std::string &s) {
+    s.erase(std::find_if(s.rbegin(), s.rend(), [](int ch) {
+        return !std::isspace(ch);
+    }).base(), s.end());
+}
+
+// trim from both ends (in place)
+static inline void trim(std::string &s) {
+    ltrim(s);
+    rtrim(s);
+}
+*/
+/*
+int get_files(std::string filelist_name, std::string* file_list){
+	
+	std::ifstream file(filelist_name);
+	if(file.fail()){
+		printf("\nError: Could not open filelist %s. Check path and permissions.\n",filelist_name);
+		return 1;
+	}
+	std::string line;
+	unsigned int i = 0;
+	while(std::getline(file, line)){
+		trim(line);
+		int len = line.size();
+		if(len>4 && line.compare(len-4,4, ".aln")==0){
+			file_list[i++] = line;
+		}
+	}
+	return i;
+}
+
+*/
+/*
+static inline void ltrim(char *str) {
+
+        // find first non-whitespace character from right
+        char *start = str;
+        char *end = str + strlen(str) - 1;
+        while(start < end && isspace(*start)) start++;
+
+        // add new null terminator
+        *(end+1) = 0;
+}
+*/
+
+static inline void rtrim(char *str) {
+
+        // find first non-whitespace character from right
+        char *end = str + strlen(str) - 1;
+        while(end > str && isspace(*end)) end--;
+
+        // add new null terminator
+        *(end+1) = 0;
+}
+
+int get_files(char* filelist_name, char** file_list, char** resfile){
+	FILE *fl;
+	char buf[MAXSTRLENGTH];
+	
+	size_t len;
+
+	fl = fopen(filelist_name, "r");
+	if (fl == NULL){
+		printf("\nError: Could not open filelist %s. Check path and permissions.\n",filelist_name);
+                return -1;
+	}
+	unsigned int i = 0;
+	while( fgets(buf, MAXSTRLENGTH, fl)) 
+	{
+		char subbuf[5];
+		len = strlen(buf);
+		rtrim(buf);
+		memcpy( subbuf, &buf[len-5],4);
+		subbuf[4] ='\0';
+
+                if(len>4 && strcmp(subbuf, ".aln")==0){
+                        file_list[i] = malloc(len);
+			strcpy(file_list[i], buf);
+	
+			char resbuf[len];
+			memcpy(resbuf, &buf[0], len-5);
+			strcat(resbuf, ".mat");
+			resfile[i] = malloc(len);
+			strcpy(resfile[i],resbuf);
+ 			
+			memset(resbuf, 0, sizeof(resbuf));
+			i++;
+               	}
+
+	}
+	return i;
+}
 
 void die(const char* message) {
 	fprintf(stderr, "\nERROR: %s\n\n", message);

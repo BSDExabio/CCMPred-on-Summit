@@ -1,3 +1,9 @@
+
+/**
+ * Extract files from the file list which has file names - a name in a line 
+ */
+int get_files(char* filelist_name, char** file_list, char** resfile);
+
 /** Sum up amino acid pairing submatrices so we have one score per pair of columns
  * @param[in] x The 21xLx21xL matrix of column and amino acid pairs
  * @param[out] out The LxL matrix of column pairs
