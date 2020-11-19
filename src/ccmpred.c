@@ -453,7 +453,7 @@ int main(int argc, char **argv)
         	FILE *msafile = fopen(file_list[job], "r");
         	if( msafile == NULL) {
                 	printf("Cannot open %s!\n\n", file_list[job]);
-                	return 2;
+                	//return 2;
         	}
 
 #ifdef JANSSON
@@ -732,7 +732,7 @@ int main(int argc, char **argv)
 		FILE* out = fopen(matfilename, "w");
 		if(out == NULL) {
 			printf("Cannot open %s for writing!\n\n", matfilename);
-			return 3;
+			//return 3;
 		}
 
 		conjugrad_float_t *outmat = conjugrad_malloc(ncol * ncol);
@@ -744,7 +744,7 @@ int main(int argc, char **argv)
 
 			if(rawfile == NULL) {
 			printf("Cannot open %s for writing!\n\n", rawfilename);
-			return 4;
+			//return 4;
 			}
 
 			write_raw(rawfile, x, ncol);
