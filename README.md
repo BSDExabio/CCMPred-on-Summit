@@ -4,7 +4,7 @@ CCMpred is a tool for learning Protein Residue-Residue Contacts from Correlated 
 **Build on Summit**
 
 ```bash
-# Laod needed modules
+# Load needed modules
 module load gcc cuda cmake/3.15.2
 # Confiuger and build
 cmake 
@@ -23,5 +23,10 @@ Using a set of sequence files
 export OMP_NUM_THREADS=4
 jsrun --smpiargs="-disable_gpu_hooks" -n 1 -r 1 -a 1 -g 1 -c 4 -d packed -b rs ./bin/ccmpred  -f ./example/list.txt
 
-Here the list.txt has names of four sequence files - a line per file name.
+Here, the list.txt has names of four sequence files - a line per file name as shown bellow,
+
+./example/1atzA.aln
+./example/2JEED.aln
+./example/3CVEB.aln
+./example/3IV1F.aln
 ```
