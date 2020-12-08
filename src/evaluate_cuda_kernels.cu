@@ -2,44 +2,17 @@
 #include "conjugrad.h"
 //#include <math_functions.h> // CUDA math functions, used for log/__logf and exp/__expf
 #include <cuda_runtime_api.h>
+
 #define TILE_DIM 32
 
-#define EDGE_MEM 6144
+#define EDGE_MEM 24576 
+//#define EDGE_MEM 6144
 
 #define DPC(n,i) d_precompiled[(n) * ncol + (i)]
 #define DPCS(n,i) d_precompiled_sum[(n) * ncol + (i)]
 #define DPCN(n,a,i) d_precompiled_norm[((n) * N_ALPHA_PAD + a) * ncol + (i)]
 
 #define DPCNS(n,z) d_precompiled_norm[(n) * (ncol * N_ALPHA_PAD) +(z)]
-
-/*
-#define REDUCEFLOATSUM(value, pAccumulator) \
-    uint32_t warpmask = 31 \
-    if (threadIdx.x == 0) \
-    { \
-        *pAccumulator = 0; \
-    } \
-    __threadfence(); \
-    __syncthreads(); \
-    if (__any_sync(0xffffffff, value != 0.0f)) \
-    { \
-        uint32_t tgx            = threadIdx.x & warpmask; \
-        value                  += __shfl_sync(0xffffffff, value, tgx ^ 1); \
-        value                  += __shfl_sync(0xffffffff, value, tgx ^ 2); \
-        value                  += __shfl_sync(0xffffffff, value, tgx ^ 4); \
-        value                  += __shfl_sync(0xffffffff, value, tgx ^ 8); \
-        value                  += __shfl_sync(0xffffffff, value, tgx ^ 16); \
-        if (tgx == 0) \
-        { \
-            atomicAdd(pAccumulator, value); \
-        } \
-    } \
-    __threadfence(); \
-    __syncthreads(); \
-    value = (float)(*pAccumulator); \
-    __syncthreads();
-
-*/
 
 // forward declaration of device functions
 __device__ void sum_reduction_function2(volatile conjugrad_float_t *s_data, int tid);
@@ -599,8 +572,8 @@ void gpu_pc(
 ) {
 
 	const unsigned int nblocks = nrow < 65535 ? nrow : 65535;
-	//const unsigned int nthreads = ncol < 64 ? ncol : 64;
-	const unsigned int nthreads = ncol < 256 ? ncol : 256;
+	const unsigned int nthreads = ncol < 1024 ? ncol : 1024;
+	//const unsigned int nthreads = ncol < 256 ? ncol : 256;
 	size_t nbytes = ncol * 4;
 
 	d_compute_pc<<<nblocks, nthreads, nbytes>>>(
@@ -679,7 +652,8 @@ void gpu_compute_edge_gradients(
 ) {
 
 	int nblocks = ncol; // max is 65535, so np
-	int nthreads_first = 256;
+	int nthreads_first = 1024;
+	//int nthreads_first = 256;
 	int nbytes = nrow < EDGE_MEM ? nrow : EDGE_MEM;
 
 	d_compute_edge_gradients<<<nblocks, nthreads_first, nbytes>>>(
@@ -841,7 +815,8 @@ void gpu_compute_weights_simple(
 
 	int idthres = (int)ceil(threshold * (conjugrad_float_t)ncol);
 	unsigned int nblocks = nrow < 65535 ? nrow : 65535;
-	unsigned int nthreads = 256;
+	unsigned int nthreads = 64;
+	//unsigned int nthreads = 256;
 	size_t nbytes = sizeof(conjugrad_float_t) * nthreads;
 
 	d_initialize_w<<<nblocks, nthreads, nbytes>>>(d_weights, idthres, d_msa, nrow, ncol);
