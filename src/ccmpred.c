@@ -91,7 +91,7 @@ static int progress(
 	int ls
 ) {
 	//printf("iter\teval\tf(x)    \t║x║     \t║g║     \tstep\n");
-	printf("%-4d\t%-4d\t%-8g\t%-8g\t%-8.8g\t%-3.3g\n", k, ls, fx, xnorm, gnorm, step);
+	//printf("%-4d\t%-4d\t%-8g\t%-8g\t%-8.8g\t%-3.3g\n", k, ls, fx, xnorm, gnorm, step);
 
 #ifdef JANSSON
 	userdata *ud = (userdata *)instance;
@@ -308,12 +308,13 @@ int main(int argc, char **argv)
 	//double run_time=0;
 	//double total_exec_time=0;
 	//double resulting_time=0;
+/*
 #ifndef _WIN32
                 struct timeval setup_timer, exec_timer,  resulting_timer;
 #else
                // double setup_timer, exec_timer, resulting_timer;
 #endif
-
+*/
 	unsigned int numthreads = 1;
 	unsigned short use_filelist = 0;
 
@@ -413,6 +414,8 @@ int main(int argc, char **argv)
 
 	double exec_time[nfiles];
 	double idle_time[nfiles];
+	double setup_time[nfiles];
+	double result_time[nfiles];
 	
 #ifdef CURSES
         bool color = detect_colors();
@@ -430,7 +433,10 @@ int main(int argc, char **argv)
                 #pragma omp master
                 { 
 		   numthreads = omp_get_num_threads();
-                   printf("\n Using %d openMP threads", numthreads); 
+                   printf("\n Using %d openMP threads", numthreads);
+#ifdef JANSSON
+                   json_object_set(meta_parameters, "cpu_threads", json_integer(numthreads));
+#endif 
                 }
                 #pragma omp barrier
 #else
@@ -441,14 +447,19 @@ int main(int argc, char **argv)
 
        		userdata *ud = (userdata *)malloc( sizeof(userdata) );
         	conjugrad_parameter_t *param = conjugrad_init();
+#ifndef _WIN32
+                struct timeval setup_timer, exec_timer,  resulting_timer;
+#else
+//                double setup_timer, exec_timer, resulting_timer;
+#endif
 
 #ifdef OPENMP
-	#pragma omp for schedule(dynamic, 1)
+		#pragma omp for schedule(dynamic, 1)
 #endif
 
 
-	for(unsigned int job=0; job <nfiles; job++){
-		printf("\n Job %d is assigned to thread %d \n", job, thread_id);
+	   for(unsigned int job=0; job <nfiles; job++){
+		printf("\n Job %d is assigned to thread %d ", job, thread_id);
 		start_timer(&setup_timer);
         	FILE *msafile = fopen(file_list[job], "r");
         	if( msafile == NULL) {
@@ -498,12 +509,6 @@ int main(int argc, char **argv)
 #ifdef JANSSON
 		json_object_set(meta_parameters, "device", json_string("gpu"));
 #endif
-#ifdef OPENMP
-		printf(" (%d thread(s))\n", numthreads);
-#ifdef JANSSON
-		json_object_set(meta_parameters, "cpu_threads", json_integer(numthreads));
-#endif
-#endif 
 
 		conjugrad_float_t *x = conjugrad_malloc(nvar_padded);
         	if( x == NULL) {
@@ -548,32 +553,41 @@ int main(int argc, char **argv)
        	 	param->ftol = 1e-4;
 	        param->wolfe = F02;
 
-		int num_devices, dev_ret;
+		int num_devices = 0; 
+		cudaError_t status;
                 struct cudaDeviceProp prop;
-                dev_ret = cudaGetDeviceCount(&num_devices);
-                if(dev_ret != CUDA_SUCCESS) {
-                        num_devices = 0;
-                }
-
-                if(num_devices == 0) {
+                status = cudaGetDeviceCount(&num_devices);
+                if(status != CUDA_SUCCESS) {
                         printf("No CUDA devices available, ");
-                        exit(1);
-                } else {
+			cudaDeviceReset();
+                        exit(-1);
+			
+                } 
+	/*	else {
                         printf("Found %d CUDA devices, ", num_devices);
                 }
+	*/
+		if(use_def_gpu >= num_devices){
+			printf("Requested device %i does not avialable, onle %i devices available. ", use_def_gpu+1, num_devices);
+                	exit(-1);
+		}
+		if (use_def_gpu <0)
+			status = cudaFree(NULL);
+		else
+			status = cudaSetDevice(use_def_gpu);
 
-                cudaError_t err = cudaSetDevice(use_def_gpu);
-                if(cudaSuccess != err) {
-                        printf("Error setting device: %d\n", err);
-                        exit(1);
+                if(cudaSuccess != status) {
+                        printf("Error setting device: %d\n", status);
+                        exit(-1);
                 }
-                cudaGetDeviceProperties(&prop, use_def_gpu);
+/*
+		cudaGetDeviceProperties(&prop, use_def_gpu);
                 printf("using device #%d: %s\n", use_def_gpu, prop.name);
 
                 size_t mem_free, mem_total;
-                err = cudaMemGetInfo(&mem_free, &mem_total);
-                if(cudaSuccess != err) {
-                        printf("Error getting memory info: %d\n", err);
+                status = cudaMemGetInfo(&mem_free, &mem_total);
+                if(cudaSuccess != status) {
+                        printf("Error getting memory info: %d\n", status);
                         exit(1);
                 }
                 size_t mem_needed = nrow * ncol * 2 + // MSAs
@@ -603,17 +617,19 @@ int main(int argc, char **argv)
 		json_object_set(meta_gpu, "mem_free", json_integer(mem_free));
 		json_object_set(meta_gpu, "mem_needed", json_integer(mem_needed));
 #endif
-
+*/
+        	setup_time[job] = seconds_since(&setup_timer);
 #ifdef OPENMP
 	#pragma omp atomic update
 #endif
-	total_setup_time += seconds_since(&setup_timer);
+		total_setup_time += setup_time[job];
 
 #ifdef OPENMP
 	#pragma omp critical
 #endif
 	{
 
+		printf("\nRunning Job #%d:\n", job);
 		idle_time[job] = seconds_since(&idle_timer);
 		start_timer(&exec_timer);
 		int (*init)(void *)  = init_cuda;
@@ -668,43 +684,41 @@ int main(int argc, char **argv)
 
 #endif
 
-		printf("\nRunning Job #%d:\n", job);
-		printf("\nWill optimize %d %ld-bit variables\n\n", nvar, sizeof(conjugrad_float_t) * 8);
-
+		printf("\nWill optimize %d %ld-bit variables\n", nvar, sizeof(conjugrad_float_t) * 8);
+/*
 		if(color) { printf("\x1b[1m"); }
 		printf("iter\teval\tf(x)    \t||x||     \t||g||     \tstep\n");
 		if(color) { printf("\x1b[0m"); }
-
+*/
 
 		conjugrad_float_t fx;
 		int ret;
 
 		conjugrad_float_t *d_x;
-		err = cudaMalloc((void **) &d_x, sizeof(conjugrad_float_t) * nvar_padded);
-		if (cudaSuccess != err) {
-			printf("CUDA error No. %d while allocation memory for d_x\n", err);
+		status = cudaMalloc((void **) &d_x, sizeof(conjugrad_float_t) * nvar_padded);
+		if (cudaSuccess != status) {
+			printf("CUDA error No. %d while allocation memory for d_x\n", status);
 			exit(1);
 		}
-		err = cudaMemcpy(d_x, x, sizeof(conjugrad_float_t) * nvar_padded, cudaMemcpyHostToDevice);
-		if (cudaSuccess != err) {
-			printf("CUDA error No. %d while copying parameters to GPU\n", err);
+		status = cudaMemcpy(d_x, x, sizeof(conjugrad_float_t) * nvar_padded, cudaMemcpyHostToDevice);
+		if (cudaSuccess != status) {
+			printf("CUDA error No. %d while copying parameters to GPU\n", status);
 			exit(1);
 		}
 		ret = conjugrad_gpu(nvar_padded, d_x, &fx, evaluate, progress, ud, param);
-		err = cudaMemcpy(x, d_x, sizeof(conjugrad_float_t) * nvar_padded, cudaMemcpyDeviceToHost);
-		if (cudaSuccess != err) {
-			printf("CUDA error No. %d while copying parameters back to CPU\n", err);
+		status = cudaMemcpy(x, d_x, sizeof(conjugrad_float_t) * nvar_padded, cudaMemcpyDeviceToHost);
+		if (cudaSuccess != status) {
+			printf("CUDA error No. %d while copying parameters back to CPU\n", status);
 			exit(1);
 		}
-		err = cudaFree(d_x);
-		if (cudaSuccess != err) {
-			printf("CUDA error No. %d while freeing memory for d_x\n", err);
+		status = cudaFree(d_x);
+		if (cudaSuccess != status) {
+			printf("CUDA error No. %d while freeing memory for d_x\n", status);
 			exit(1);
 		}
 		exec_time[job] = seconds_since(&exec_timer);
 		
-		printf("\n");
-		printf("%s with status code %d - ", (ret < 0 ? "Exit" : "Done"), ret);
+		printf("\n %s with status code %d - ", (ret < 0 ? "Exit" : "Done"), ret);
 
 		if(ret == CONJUGRAD_SUCCESS) {
 			printf("Success!\n");
@@ -726,7 +740,8 @@ int main(int argc, char **argv)
 #endif
 
                 total_exec_time += exec_time[job];
-        // Post-processing ------
+       
+	 // Post-processing ------
 		start_timer(&resulting_timer);
                 matfilename = resfile[job];
 		FILE* out = fopen(matfilename, "w");
@@ -815,12 +830,13 @@ int main(int argc, char **argv)
 		}
 
 #endif
+	        result_time[job]=seconds_since(&resulting_timer);
 #ifdef OPENMP
 	         #pragma omp atomic update
 #endif
-	        total_resulting_time+=seconds_since(&resulting_timer);
+		total_resulting_time+=result_time[job]; 
 
-		printf("\nJob #%d took %.3f sec after waiting %.3f sec for setup\n", job, exec_time[job], idle_time[job]);
+		printf("\nJob #%d took %.3f sec for the execution after taking %.3f sec for setup and took %.3f for resulting \n", job, exec_time[job], setup_time[job], result_time[job]);
 		fflush(out);
 		fclose(out);
 		conjugrad_free(outmat);

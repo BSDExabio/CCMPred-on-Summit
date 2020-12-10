@@ -131,7 +131,7 @@ int init_cuda( void *instance ) {
 			if(wt > wmax) { wmax = wt; }
 			if(wt < wmin) { wmin = wt; }
 		}
-		printf("Reweighted %d sequences with threshold %.1f to Beff=%g weight mean=%g, min=%g, max=%g\n", nrow, ud->reweighting_threshold, wsum, wsum / nrow, wmin, wmax);
+		printf("\n Reweighted %d sequences with threshold %.1f to Beff=%g weight mean=%g, min=%g, max=%g", nrow, ud->reweighting_threshold, wsum, wsum / nrow, wmin, wmax);
 		free(tmp_weights);
 
 	} else {
@@ -145,7 +145,7 @@ int init_cuda( void *instance ) {
 		CHECK_ERR(cudaMemcpy(d_weights, tmp_weights, sizeof(conjugrad_float_t) * nrow, cudaMemcpyHostToDevice));
 		free(tmp_weights);
 		//CHECK_ERR(cudaMemPrefetchAsync(d_weights,sizeof(conjugrad_float_t) * nrow, device, NULL));
-		printf("Using uniform weights\n");	
+		printf("\n Using uniform weights");	
 
 	}
 
