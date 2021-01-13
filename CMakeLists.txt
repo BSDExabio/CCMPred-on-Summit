@@ -12,6 +12,12 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/lib/libconjugrad/CMakeLists.txt")
 	message(FATAL_ERROR "CCMpred is missing the libconjugrad submodule! Please make sure to clone CCMpred according to the instructions in the README at \n https://github.com/soedinglab/CCMpred/blob/master/README.md#downloading")
 endif()
 
+if(OPENMP_FOUND)
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
+endif(OPENMP_FOUND)
+
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/cmake_lib/")
 
 set(CMAKE_C_FLAGS "-std=c99 -O3 -fno-strict-aliasing -g -fopenmp")
@@ -103,6 +109,7 @@ endif(LIBUUID_FOUND)
 if(WITH_OMP)
 	find_package(OpenMP)
 endif(WITH_OMP)
+
 if(OPENMP_FOUND)
 #	list(APPEND SOURCES src/evaluate_cpu_omp.c)
 	add_definitions("-DOPENMP")
