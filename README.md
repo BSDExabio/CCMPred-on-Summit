@@ -4,6 +4,10 @@ CCMpred is a tool for learning Protein Residue-Residue Contacts from Correlated 
 **Build on Summit**
 
 ```bash
+# Clone the git repository
+
+# Checkout a specific branch 
+git checkout <branch_name>
 # Load needed modules
 module load gcc cuda cmake/3.15.2
 # Confiuger and build
