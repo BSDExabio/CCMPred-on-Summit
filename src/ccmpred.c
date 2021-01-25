@@ -248,6 +248,65 @@ void usage(char* exename, int long_usage) {
 	exit(1);
 }
 
+
+
+inline unsigned
+gpu_scheduler_roundrobin(unsigned *occupancies, int taskID, int ngpus)
+{
+  const unsigned chosen = taskID % ngpus;
+#pragma omp atomic
+  occupancies[chosen]++;
+  return chosen;
+}
+
+inline unsigned
+gpu_scheduler(unsigned *occupancies, int ngpus)
+{
+  short looking = 1;
+  unsigned chosen;
+  while (looking) {
+    for (unsigned i = 0; i < ngpus; i++) {
+      // But really, this should be a single atomic compare-and-swap
+      unsigned occ_i;
+      #pragma omp atomic read
+      occ_i = occupancies[i];
+      if (occ_i == 0) {
+        chosen = i;
+#pragma omp atomic
+        occupancies[chosen]++;
+        looking = 0;
+        break;
+      }
+    }
+  }
+  return chosen;
+}
+
+inline unsigned 
+gpu_scheduler_dynamic_affinity(unsigned *occupancies, int ngpus)
+{
+  short looking = 1;
+  unsigned chosen;
+  while (looking) {
+    for (unsigned i = 0; i < ngpus; i++) {
+      // But really, this should be a single atomic compare-and-swap
+      unsigned occ_i;
+      #pragma omp atomic read
+      occ_i = occupancies[i];
+      if (occ_i == 0) {
+        chosen = i;
+#pragma omp atomic
+        occupancies[chosen]++;
+        looking = 0;
+        break;
+      }
+    }
+  }
+  return chosen;
+}
+
+
+
 int main(int argc, char **argv)
 {
 	// Timer initializations
@@ -425,7 +484,29 @@ int main(int argc, char **argv)
 	logo(color);
         printf("\n number of files : %d \n", nfiles);
 
+	int num_devices = 0; 
 #ifdef OPENMP
+	num_devices = omp_get_num_devices(); 
+#endif
+
+        cudaError_t sts = cudaGetDeviceCount(&num_devices);
+        if(sts != CUDA_SUCCESS) {
+                        printf("No CUDA devices available, ");
+                        cudaDeviceReset();
+                        exit(-1);
+                        
+        } 
+
+
+        printf("num devices: %d \n", num_devices);
+	unsigned *task_counts = (unsigned *) calloc(num_devices, sizeof(*task_counts));
+ 	unsigned *occupancies = (unsigned *) calloc(num_devices, sizeof(*occupancies));
+  	unsigned *lastGPU = NULL;
+        int numtasks = nfiles;
+
+#ifdef OPENMP
+        omp_lock_t lock;
+        omp_init_lock(&lock);
 	//omp_set_num_threads(numthreads);
         #pragma omp parallel
         {
@@ -454,11 +535,14 @@ int main(int argc, char **argv)
 #endif
 
 #ifdef OPENMP
-		#pragma omp for schedule(dynamic, 1)
+	  #pragma omp single
+          {
+	  #pragma omp taskloop grainsize(1) 
+	  //#pragma omp for schedule(dynamic, 1)
 #endif
-
-
-	   for(unsigned int job=0; job <nfiles; job++){
+	   for(unsigned int job=0; job <numtasks; job++){
+		const int dev = gpu_scheduler_roundrobin(occupancies, job, num_devices);
+		//const int dev = gpu_scheduler(occupancies, num_devices);
 		printf("\n Job %d is assigned to thread %d ", job, thread_id);
 		start_timer(&setup_timer);
         	FILE *msafile = fopen(file_list[job], "r");
@@ -553,7 +637,11 @@ int main(int argc, char **argv)
        	 	param->ftol = 1e-4;
 	        param->wolfe = F02;
 
-		int num_devices = 0; 
+		cudaError_t status;
+		status = cudaSetDevice(dev);
+  /*      #pragma omp critical
+//	{
+	//	int num_devices = 0; 
 		cudaError_t status;
                 struct cudaDeviceProp prop;
                 status = cudaGetDeviceCount(&num_devices);
@@ -563,10 +651,10 @@ int main(int argc, char **argv)
                         exit(-1);
 			
                 } 
-	/*	else {
-                        printf("Found %d CUDA devices, ", num_devices);
-                }
-	*/
+	//	else {
+         //               printf("Found %d CUDA devices, ", num_devices);
+         //       }
+	
 		if(use_def_gpu >= num_devices){
 			printf("Requested device %i does not avialable, onle %i devices available. ", use_def_gpu+1, num_devices);
                 	exit(-1);
@@ -574,12 +662,14 @@ int main(int argc, char **argv)
 		if (use_def_gpu <0)
 			status = cudaFree(NULL);
 		else
-			status = cudaSetDevice(use_def_gpu);
+			//status = cudaSetDevice(use_def_gpu);
+			status = cudaSetDevice(thread_id%num_devices);
 
                 if(cudaSuccess != status) {
                         printf("Error setting device: %d\n", status);
                         exit(-1);
                 }
+	} */
 /*
 		cudaGetDeviceProperties(&prop, use_def_gpu);
                 printf("using device #%d: %s\n", use_def_gpu, prop.name);
@@ -625,7 +715,8 @@ int main(int argc, char **argv)
 		total_setup_time += setup_time[job];
 
 #ifdef OPENMP
-	#pragma omp critical
+//	#pragma omp critical
+	omp_set_lock(&lock);
 #endif
 	{
 
@@ -694,6 +785,7 @@ int main(int argc, char **argv)
 		conjugrad_float_t fx;
 		int ret;
 
+		cudaError_t status;
 		conjugrad_float_t *d_x;
 		status = cudaMalloc((void **) &d_x, sizeof(conjugrad_float_t) * nvar_padded);
 		if (cudaSuccess != status) {
@@ -736,6 +828,7 @@ int main(int argc, char **argv)
 		start_timer(&idle_timer);
  	} // end critical region
 #ifdef OPENMP
+	omp_unset_lock(&lock);
                 #pragma omp atomic update
 #endif
 
@@ -843,12 +936,14 @@ int main(int argc, char **argv)
 		conjugrad_free(x);
 		free(msa);
 	}//End of the for loop - Run over the list of files
-
+        }// End of the single
 		conjugrad_free(ud->weights);
 		free(ud);
 		free(param);
 	} // End of parallel section
-
+#ifdef OPENMP
+	omp_destroy_lock(&lock);
+#endif
 //Print the run time
 
 #ifndef _WIN32
