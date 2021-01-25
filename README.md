@@ -4,6 +4,10 @@ CCMpred is a tool for learning Protein Residue-Residue Contacts from Correlated 
 **Build on Summit**
 
 ```bash
+# Clone the git repository
+git clone https://github.com/BSDExabio/CCMpred-on-Summit.git
+# Checkout a specific branch 
+git checkout <branch_name>
 # Load needed modules
 module load gcc cuda cmake/3.15.2
 # Confiuger and build
@@ -12,12 +16,31 @@ make
 
 ```
 
+**Supported Arguments**
+
+| Argument | Description   | Default value                     |
+|:-----------------:|:-------------:|:-------------------------:|
+| -d            |Device number    |0       |
+| -t            | Number of CPU threads    |1              |
+| -n            | Number of operations    |50              |
+| -e            | Epsilon    |0.01              |
+| -k            | K parameter    |5              |
+| -w            | Sequence reweighting identity threshold    |0.8              |
+| -l            | Pairwise regularization coefficients    |0.2              |
+| -A            | Disable average product correction    |              |
+| -A            | Re-normalize output matrix to [0,1]    |              |
+| -i            | Initial weight file   |              |
+| -r            | Raw prediction matrix file    |              |
+| -b            | Raw prediction matrix file in msgpack format    |              |
+| -f            | Sequence files's list    |              |
+
+
 **Run on Summit**
 
 ```bash
 # Example
 Using a single sequence file
-jsrun -n 1 -a 1 -c 1 -b packed:1 -g 1 ./bin/ccmpred  ./example/2ID0A.aln out.mat
+jsrun -n 1 -a 1 -c 1 -b packed:1 -g 1 ./bin/ccmpred  ./example/2ID0A.aln 2ID0A.mat [2ID0A.plm works only for plm branch]
 
 Using a set of sequence files
 export OMP_NUM_THREADS=4
