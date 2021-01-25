@@ -1,9 +1,15 @@
+
+/**
+ * Extract files from the file list which has file names - a name in a line 
+ */
+int get_files(char* filelist_name, char** file_list, char** resfile);
+
 /** Sum up amino acid pairing submatrices so we have one score per pair of columns
  * @param[in] x The 21xLx21xL matrix of column and amino acid pairs
  * @param[out] out The LxL matrix of column pairs
  * @param[in] ncol The number of columns in the output matrix (i.e. L)
  */
-int sum_submatrices(conjugrad_float_t *x, conjugrad_float_t *out, int ncol, char* plmname);
+void sum_submatrices(conjugrad_float_t *x, conjugrad_float_t *out, int ncol);
 
 /** Average product correction
  * @param[in,out] mat The matrix to process
