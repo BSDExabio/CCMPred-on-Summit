@@ -16,11 +16,12 @@ make
 
 ```
 **Supported arguments
+
 | Argument | Description   | Default value                     |
 |:-----------------:|:-------------:|:-------------------------:|
 | -d            |Device number    |0       |
-| -t            | # CPU threads    |1              |
-| -n            | # Operations    |50              |
+| -t            | Number of CPU threads    |1              |
+| -n            | Number of operations    |50              |
 | -e            | Epsilon    |0.01              |
 | -k            | K parameter    |5              |
 | -w            | Sequence reweighting identity threshold    |0.8              |
@@ -38,7 +39,7 @@ make
 ```bash
 # Example
 Using a single sequence file
-jsrun -n 1 -a 1 -c 1 -b packed:1 -g 1 ./bin/ccmpred  ./example/2ID0A.aln out.mat
+jsrun -n 1 -a 1 -c 1 -b packed:1 -g 1 ./bin/ccmpred  ./example/2ID0A.aln 2ID0A.mat [2ID0A.plm works only for plm branch]
 
 Using a set of sequence files
 export OMP_NUM_THREADS=4
