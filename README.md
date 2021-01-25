@@ -5,7 +5,7 @@ CCMpred is a tool for learning Protein Residue-Residue Contacts from Correlated 
 
 ```bash
 # Clone the git repository
-
+git clone https://github.com/BSDExabio/CCMpred-on-Summit.git
 # Checkout a specific branch 
 git checkout <branch_name>
 # Load needed modules
