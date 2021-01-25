@@ -15,6 +15,23 @@ cmake
 make
 
 ```
+**Supported arguments
+| Argument | Description   | Default value                     |
+|:-----------------:|:-------------:|:-------------------------:|
+| -d            |Device number    |0       |
+| -t            | # CPU threads    |1              |
+| -n            | # Operations    |50              |
+| -e            | Epsilon    |0.01              |
+| -k            | K parameter    |5              |
+| -w            | Sequence reweighting identity threshold    |0.8              |
+| -l            | Pairwise regularization coefficients    |0.2              |
+| -A            | Disable average product correction    |              |
+| -A            | Re-normalize output matrix to [0,1]    |              |
+| -i            | Initial weight file   |              |
+| -r            | Raw prediction matrix file    |              |
+| -b            | Raw prediction matrix file in msgpack format    |              |
+| -f            | Sequence files's list    |              |
+
 
 **Run on Summit**
 
