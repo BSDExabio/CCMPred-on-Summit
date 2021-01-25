@@ -16,9 +16,8 @@ make
 
 ```
 
-**Supported Arguments
+**Supported Arguments**
 
-```
 | Argument | Description   | Default value                     |
 |:-----------------:|:-------------:|:-------------------------:|
 | -d            |Device number    |0       |
@@ -34,7 +33,7 @@ make
 | -r            | Raw prediction matrix file    |              |
 | -b            | Raw prediction matrix file in msgpack format    |              |
 | -f            | Sequence files's list    |              |
-```
+
 
 **Run on Summit**
 
