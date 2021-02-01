@@ -24,22 +24,27 @@ int sum_submatrices(conjugrad_float_t *x,conjugrad_float_t *out, int ncol,char* 
 
 	conjugrad_float_t xnorm = 0;
 	
-	if (!(plm = fopen(plmname, "wb"))){
+	if (!(plm = fopen(plmname, "w"))){
+	//if (!(plm = fopen(plmname, "wb"))){
 		printf("Cannot open plm file%s !\n",plmname);
 		return 4;
-	} 
+	}
 	for(int a = 0; a < N_ALPHA; a++) {
 		for(int b = 0; b < N_ALPHA; b++) {
 			for(int k = 0; k < ncol; k++) {
 				for(int j = 0; j < ncol; j++) {
-					 val=W(b,k,a,j);
-					 if (fwrite(&val, sizeof(float), 1, plm) != 1){
+					 val = W(b,k,a,j);
+					 if (fprintf(plm ,"%f ", val) < 0) {
+					 //if (fwrite(&val, sizeof(float), 1, plm) != 1){
 						 printf("Write failed %s!",plm);
 						 return 4;
 					 }
 				}
+				fprintf(plm, "\n");
 			}
+			fprintf(plm, "\n");
 		}
+		fprintf(plm, "\n");
 	}
 	
 	for(int k = 0; k < ncol; k++) {
