@@ -92,23 +92,6 @@ static int progress(
 ) {
 	//printf("iter\teval\tf(x)    \t║x║     \t║g║     \tstep\n");
 	//printf("%-4d\t%-4d\t%-8g\t%-8g\t%-8.8g\t%-3.3g\n", k, ls, fx, xnorm, gnorm, step);
-
-#ifdef JANSSON
-	userdata *ud = (userdata *)instance;
-	json_t *meta_steps = (json_t *)ud->meta_steps;
-
-	json_t *ms = json_object();
-	json_object_set(ms, "iteration", json_integer(k));
-	json_object_set(ms, "eval", json_integer(ls));
-	json_object_set(ms, "fx", json_real(fx));
-	json_object_set(ms, "xnorm", json_real(xnorm));
-	json_object_set(ms, "gnorm", json_real(gnorm));
-	json_object_set(ms, "step", json_real(step));
-
-	json_array_append(meta_steps, ms);
-
-#endif
-
 	return 0;
 }
 
@@ -505,8 +488,8 @@ int main(int argc, char **argv)
         int numtasks = nfiles;
 
 #ifdef OPENMP
-        omp_lock_t lock;
-        omp_init_lock(&lock);
+        //omp_lock_t lock;
+        //omp_init_lock(&lock);
 	//omp_set_num_threads(numthreads);
         #pragma omp parallel
         {
@@ -515,9 +498,6 @@ int main(int argc, char **argv)
                 { 
 		   numthreads = omp_get_num_threads();
                    printf("\n Using %d openMP threads", numthreads);
-#ifdef JANSSON
-                   json_object_set(meta_parameters, "cpu_threads", json_integer(numthreads));
-#endif 
                 }
                 #pragma omp barrier
 #else
@@ -526,8 +506,8 @@ int main(int argc, char **argv)
 #endif
 
 
-       		userdata *ud = (userdata *)malloc( sizeof(userdata) );
-        	conjugrad_parameter_t *param = conjugrad_init();
+       		//userdata *ud = (userdata *)malloc( sizeof(userdata) );
+        	//conjugrad_parameter_t *param = conjugrad_init();
 #ifndef _WIN32
                 struct timeval setup_timer, exec_timer,  resulting_timer;
 #else
@@ -551,36 +531,6 @@ int main(int argc, char **argv)
                 	//return 2;
         	}
 
-#ifdef JANSSON
-       	 	char* metafilename = malloc(2048);
-        	snprintf(metafilename, 2048, "%s.meta.json", msafilename);
-        
-        	FILE *metafile = fopen(metafilename, "r");
-        	json_t *meta;
-        	if(metafile == NULL) {
-                // Cannot find .meta.json file - create new empty metadata
-                	meta = meta_create();
-       		 } else {
-               	 // Load metadata from matfile.meta.json
-                	meta = meta_read_json(metafile);
-                	fclose(metafile);
-        	}
-        
-        	json_object_set(meta, "method", json_string("ccmpred"));
-        
-        	json_t *meta_step = meta_add_step(meta, "ccmpred");
-        	json_object_set(meta_step, "version", json_string(__VERSION));
-                
-        	json_t *meta_parameters = json_object();
-        	json_object_set(meta_step, "parameters", meta_parameters);
-                
-        	json_t *meta_steps = json_array();
-        	json_object_set(meta_step, "iterations", meta_steps);
-        
-        	json_t *meta_results = json_object();
-	        json_object_set(meta_step, "results", meta_results);
-
-#endif
 		int ncol, nrow;
 		unsigned char* msa = read_msa(msafile, &ncol, &nrow);
 		fclose(msafile);
@@ -589,10 +539,6 @@ int main(int argc, char **argv)
 		int nvar = nsingle + ncol * ncol * N_ALPHA * N_ALPHA;
 		int nsingle_padded = nsingle + N_ALPHA_PAD - (nsingle % N_ALPHA_PAD);
 		int nvar_padded = nsingle_padded + ncol * ncol * N_ALPHA * N_ALPHA_PAD;
-
-#ifdef JANSSON
-		json_object_set(meta_parameters, "device", json_string("gpu"));
-#endif
 
 		conjugrad_float_t *x = conjugrad_malloc(nvar_padded);
         	if( x == NULL) {
@@ -606,7 +552,7 @@ int main(int argc, char **argv)
         	}
 
         	// fill up user data struct for passing to evaluate
-       		//userdata *ud = (userdata *)malloc( sizeof(userdata) );
+       		userdata *ud = (userdata *)malloc( sizeof(userdata) );
         	if(ud == 0) { die("Cannot allocate memory for user data!"); }
         	ud->msa = msa;
         	ud->ncol = ncol;
@@ -627,7 +573,7 @@ int main(int argc, char **argv)
         	}
 
         	// optimize with default parameters
-        	//conjugrad_parameter_t *param = conjugrad_init();
+        	conjugrad_parameter_t *param = conjugrad_init();
 
         	param->max_iterations = numiter;
         	param->epsilon = conjugrad_eps;
@@ -639,85 +585,12 @@ int main(int argc, char **argv)
 
 		cudaError_t status;
 		status = cudaSetDevice(dev);
-  /*      #pragma omp critical
-//	{
-	//	int num_devices = 0; 
-		cudaError_t status;
-                struct cudaDeviceProp prop;
-                status = cudaGetDeviceCount(&num_devices);
-                if(status != CUDA_SUCCESS) {
-                        printf("No CUDA devices available, ");
-			cudaDeviceReset();
-                        exit(-1);
-			
-                } 
-	//	else {
-         //               printf("Found %d CUDA devices, ", num_devices);
-         //       }
-	
-		if(use_def_gpu >= num_devices){
-			printf("Requested device %i does not avialable, onle %i devices available. ", use_def_gpu+1, num_devices);
-                	exit(-1);
-		}
-		if (use_def_gpu <0)
-			status = cudaFree(NULL);
-		else
-			//status = cudaSetDevice(use_def_gpu);
-			status = cudaSetDevice(thread_id%num_devices);
-
-                if(cudaSuccess != status) {
-                        printf("Error setting device: %d\n", status);
-                        exit(-1);
-                }
-	} */
-/*
-		cudaGetDeviceProperties(&prop, use_def_gpu);
-                printf("using device #%d: %s\n", use_def_gpu, prop.name);
-
-                size_t mem_free, mem_total;
-                status = cudaMemGetInfo(&mem_free, &mem_total);
-                if(cudaSuccess != status) {
-                        printf("Error getting memory info: %d\n", status);
-                        exit(1);
-                }
-                size_t mem_needed = nrow * ncol * 2 + // MSAs
-                            sizeof(conjugrad_float_t) * nrow * ncol * 2 + // PC, PCS
-                            sizeof(conjugrad_float_t) * nrow * ncol * N_ALPHA_PAD + // PCN
-                            sizeof(conjugrad_float_t) * nrow + // Weights
-                            (sizeof(conjugrad_float_t) * ((N_ALPHA - 1) * ncol + ncol * ncol * N_ALPHA * N_ALPHA_PAD)) * 4;
-
-                setlocale(LC_NUMERIC, "");
-                printf("Total GPU RAM:  %'17lu\n", mem_total);
-                printf("Free GPU RAM:   %'17lu\n", mem_free);
-                printf("Needed GPU RAM: %'17lu ", mem_needed);
-
-                if(mem_needed <= mem_free) {
-                        printf("\n GPU has enough memory for the execution");
-                } else {
-                        printf("\n GPU memory is not enough for the execution");
-               }
-
-#ifdef JANSSON
-		json_object_set(meta_parameters, "device", json_string("gpu"));
-		json_t* meta_gpu = json_object();
-		json_object_set(meta_parameters, "gpu_info", meta_gpu);
-
-		json_object_set(meta_gpu, "name", json_string(prop.name));
-		json_object_set(meta_gpu, "mem_total", json_integer(mem_total));
-		json_object_set(meta_gpu, "mem_free", json_integer(mem_free));
-		json_object_set(meta_gpu, "mem_needed", json_integer(mem_needed));
-#endif
-*/
         	setup_time[job] = seconds_since(&setup_timer);
 #ifdef OPENMP
 	#pragma omp atomic update
 #endif
 		total_setup_time += setup_time[job];
 
-#ifdef OPENMP
-//	#pragma omp critical
-	omp_set_lock(&lock);
-#endif
 	{
 
 		printf("\nRunning Job #%d:\n", job);
@@ -728,52 +601,6 @@ int main(int argc, char **argv)
 		conjugrad_evaluate_t evaluate = evaluate_cuda;
 
 		init(ud);
-#ifdef JANSSON
-		json_object_set(meta_parameters, "reweighting_threshold", json_real(ud->reweighting_threshold));
-		json_object_set(meta_parameters, "apc", json_boolean(use_apc));
-		json_object_set(meta_parameters, "normalization", json_boolean(use_normalization));
-
-		json_t *meta_regularization = json_object();
-		json_object_set(meta_parameters, "regularization", meta_regularization);
-
-		json_object_set(meta_regularization, "type", json_string("l2")); 
-		json_object_set(meta_regularization, "lambda_single", json_real(lambda_single));
-		json_object_set(meta_regularization, "lambda_pair", json_real(lambda_pair));
-		json_object_set(meta_regularization, "lambda_pair_factor", json_real(lambda_pair_factor));
-
-		json_t *meta_opt = json_object();
-		json_object_set(meta_parameters, "optimization", meta_opt);
-
-		json_object_set(meta_opt, "method", json_string("libconjugrad"));
-		json_object_set(meta_opt, "float_bits", json_integer((int)sizeof(conjugrad_float_t) * 8));
-		json_object_set(meta_opt, "max_iterations", json_integer(param->max_iterations));
-		json_object_set(meta_opt, "max_linesearch", json_integer(param->max_linesearch));
-		json_object_set(meta_opt, "alpha_mul", json_real(param->alpha_mul));
-		json_object_set(meta_opt, "ftol", json_real(param->ftol));
-		json_object_set(meta_opt, "wolfe", json_real(param->wolfe));
-
-		json_t *meta_msafile = meta_file_from_path(msafilename);
-		json_object_set(meta_parameters, "msafile", meta_msafile);
-		json_object_set(meta_msafile, "ncol", json_integer(ncol));
-		json_object_set(meta_msafile, "nrow", json_integer(nrow));
-
-		if(initfilename != NULL) {
-			json_t *meta_initfile = meta_file_from_path(initfilename);
-			json_object_set(meta_parameters, "initfile", meta_initfile);
-			json_object_set(meta_initfile, "ncol", json_integer(ncol));
-			json_object_set(meta_initfile, "nrow", json_integer(nrow));
-		}
-
-		double neff = 0;
-		for(int i = 0; i < nrow; i++) {
-			neff += ud->weights[i];
-		}
-
-		json_object_set(meta_msafile, "neff", json_real(neff));
-
-		ud->meta_steps = meta_steps;
-
-#endif
 
 		printf("\nWill optimize %d %ld-bit variables\n", nvar, sizeof(conjugrad_float_t) * 8);
 /*
@@ -828,7 +655,6 @@ int main(int argc, char **argv)
 		start_timer(&idle_timer);
  	} // end critical region
 #ifdef OPENMP
-	omp_unset_lock(&lock);
                 #pragma omp atomic update
 #endif
 
@@ -836,15 +662,16 @@ int main(int argc, char **argv)
        
 	 // Post-processing ------
 		start_timer(&resulting_timer);
-                matfilename = resfile[job];
-		FILE* out = fopen(matfilename, "w");
+                //matfilename = resfile[job];
+		//FILE* out = fopen(matfilename, "w");
+		FILE* out = fopen(resfile[job], "w");
 		if(out == NULL) {
 			printf("Cannot open %s for writing!\n\n", matfilename);
 			//return 3;
 		}
 
 		conjugrad_float_t *outmat = conjugrad_malloc(ncol * ncol);
-
+/*
 		FILE *rawfile = NULL;
 		if(rawfilename != NULL) {
 			printf("Writing raw output to %s\n", rawfilename);
@@ -869,13 +696,9 @@ int main(int argc, char **argv)
 				printf("Cannot open %s for writing!\n\n", msgpackfilename);
 				return 4;
 			}
-#ifndef JANSSON
-			void *meta = NULL;
-#endif
-
 		}
 #endif
-
+*/
 		sum_submatrices(x, outmat, ncol);
 
 		if(use_apc) {
@@ -888,31 +711,7 @@ int main(int argc, char **argv)
 
 		write_matrix(out, outmat, ncol, ncol);
 
-#ifdef JANSSON
-		json_object_set(meta_results, "fx_final", json_real(fx));
-		json_object_set(meta_results, "num_iterations", json_integer(json_array_size(meta_steps)));
-		json_object_set(meta_results, "opt_code", json_integer(ret));
-
-		json_t *meta_matfile = meta_file_from_path(matfilename);
-		json_object_set(meta_results, "matfile", meta_matfile);
-
-		if(rawfilename != NULL) {
-			json_object_set(meta_results, "rawfile", meta_file_from_path(rawfilename));
-		}
-
-#ifdef MSGPACK
-		if(msgpackfilename != NULL) {
-			json_object_set(meta_results, "msgpackfile", meta_file_from_path(msgpackfilename));
-		}
-#endif
-
-		fprintf(out, "#>META> %s", json_dumps(meta, JSON_COMPACT));
-		if(rawfile != NULL) {
-			fprintf(rawfile, "#>META> %s", json_dumps(meta, JSON_COMPACT));
-		}
-#endif
-
-		if(rawfile != NULL) {
+/*		if(rawfile != NULL) {
 			fclose(rawfile);
 		}
 
@@ -923,6 +722,7 @@ int main(int argc, char **argv)
 		}
 
 #endif
+*/
 	        result_time[job]=seconds_since(&resulting_timer);
 #ifdef OPENMP
 	         #pragma omp atomic update
@@ -935,15 +735,15 @@ int main(int argc, char **argv)
 		conjugrad_free(outmat);
 		conjugrad_free(x);
 		free(msa);
-	}//End of the for loop - Run over the list of files
-        }// End of the single
 		conjugrad_free(ud->weights);
 		free(ud);
 		free(param);
+	}//End of the for loop - Run over the list of files
+        }// End of the single
+		//conjugrad_free(ud->weights);
+		//free(ud);
+		//free(param);
 	} // End of parallel section
-#ifdef OPENMP
-	omp_destroy_lock(&lock);
-#endif
 //Print the run time
 
 #ifndef _WIN32
