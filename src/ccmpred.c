@@ -425,6 +425,23 @@ int main(int argc, char **argv)
 	logo(color);
         printf("\n number of files : %d \n", nfiles);
 
+        int num_devices = 0;
+/*#ifdef OPENMP
+        num_devices = omp_get_num_devices() ; 
+        printf("Found %d CUDA devices, ", num_devices);
+#else
+*/
+        cudaError_t sts = cudaGetDeviceCount(&num_devices);
+        if(sts != CUDA_SUCCESS) {
+               printf("No CUDA devices available, ");
+               cudaDeviceReset();
+               exit(-1);
+        }
+        else {
+               printf("Found %d CUDA devices, ", num_devices);
+        }
+//#//endif
+
 #ifdef OPENMP
 	//omp_set_num_threads(numthreads);
         #pragma omp parallel
@@ -445,8 +462,8 @@ int main(int argc, char **argv)
 #endif
 
 
-       		userdata *ud = (userdata *)malloc( sizeof(userdata) );
-        	conjugrad_parameter_t *param = conjugrad_init();
+       		//userdata *ud = (userdata *)malloc( sizeof(userdata) );
+        	//conjugrad_parameter_t *param = conjugrad_init();
 #ifndef _WIN32
                 struct timeval setup_timer, exec_timer,  resulting_timer;
 #else
@@ -456,10 +473,8 @@ int main(int argc, char **argv)
 #ifdef OPENMP
 		#pragma omp for schedule(dynamic, 1)
 #endif
-
-
 	   for(unsigned int job=0; job <nfiles; job++){
-		printf("\n Job %d is assigned to thread %d ", job, thread_id);
+		//printf("\n Job %d is assigned to thread %d ", job, thread_id);
 		start_timer(&setup_timer);
         	FILE *msafile = fopen(file_list[job], "r");
         	if( msafile == NULL) {
@@ -522,13 +537,14 @@ int main(int argc, char **argv)
         	}
 
         	// fill up user data struct for passing to evaluate
-       		//userdata *ud = (userdata *)malloc( sizeof(userdata) );
+       		userdata *ud = (userdata *)malloc( sizeof(userdata) );
         	if(ud == 0) { die("Cannot allocate memory for user data!"); }
         	ud->msa = msa;
         	ud->ncol = ncol;
         	ud->nrow = nrow;
         	ud->nsingle = nsingle;
         	ud->nvar = nvar;
+        //	ud->nvar_padded = nvar_padded;
         	ud->lambda_single = lambda_single;
         	ud->lambda_pair = lambda_pair;
         	ud->weights = conjugrad_malloc(nrow);
@@ -543,7 +559,7 @@ int main(int argc, char **argv)
         	}
 
         	// optimize with default parameters
-        	//conjugrad_parameter_t *param = conjugrad_init();
+        	conjugrad_parameter_t *param = conjugrad_init();
 
         	param->max_iterations = numiter;
         	param->epsilon = conjugrad_eps;
@@ -553,20 +569,15 @@ int main(int argc, char **argv)
        	 	param->ftol = 1e-4;
 	        param->wolfe = F02;
 
-		int num_devices = 0; 
-		cudaError_t status;
-                struct cudaDeviceProp prop;
-                status = cudaGetDeviceCount(&num_devices);
-                if(status != CUDA_SUCCESS) {
-                        printf("No CUDA devices available, ");
-			cudaDeviceReset();
+                unsigned int dev ;  
+#ifdef OPENMP
+                dev = thread_id%num_devices;  // Can be changed based on the schedule
+		cudaError_t status = cudaSetDevice(dev);
+                if(cudaSuccess != status) {
+                        printf("Error setting device: %d\n", status);
                         exit(-1);
-			
-                } 
-	/*	else {
-                        printf("Found %d CUDA devices, ", num_devices);
                 }
-	*/
+#else
 		if(use_def_gpu >= num_devices){
 			printf("Requested device %i does not avialable, onle %i devices available. ", use_def_gpu+1, num_devices);
                 	exit(-1);
@@ -580,7 +591,10 @@ int main(int argc, char **argv)
                         printf("Error setting device: %d\n", status);
                         exit(-1);
                 }
+#endif
+		printf("\n Job %d process the sequence %d using thread %d and device %d \n", job, file_list[job], thread_id, dev);
 /*
+                struct cudaDeviceProp prop;
 		cudaGetDeviceProperties(&prop, use_def_gpu);
                 printf("using device #%d: %s\n", use_def_gpu, prop.name);
 
@@ -620,23 +634,26 @@ int main(int argc, char **argv)
 */
         	setup_time[job] = seconds_since(&setup_timer);
 #ifdef OPENMP
-	#pragma omp atomic update
+//	#pragma omp atomic update
 #endif
 		total_setup_time += setup_time[job];
 
 #ifdef OPENMP
-	#pragma omp critical
+//	#pragma omp critical
+//	#pragma omp barrier
 #endif
 	{
 
-		printf("\nRunning Job #%d:\n", job);
+		//printf("\nRunning Job #%d:\n", job);
 		idle_time[job] = seconds_since(&idle_timer);
 		start_timer(&exec_timer);
-		int (*init)(void *)  = init_cuda;
-		int (*destroy)(void *) = destroy_cuda;
-		conjugrad_evaluate_t evaluate = evaluate_cuda;
+		//int (*init)(void *)  = init_cuda;
+		//int (*destroy)(void *) = destroy_cuda;
+		conjugrad_evaluate_gpu_t evaluate = evaluate_cuda;
 
-		init(ud);
+       		devicedata dd; // = (devicedata *)malloc( sizeof(devicedata) );
+		init_cuda(nvar_padded, ud, &dd);
+/*
 #ifdef JANSSON
 		json_object_set(meta_parameters, "reweighting_threshold", json_real(ud->reweighting_threshold));
 		json_object_set(meta_parameters, "apc", json_boolean(use_apc));
@@ -684,6 +701,7 @@ int main(int argc, char **argv)
 
 #endif
 
+*/
 		printf("\nWill optimize %d %ld-bit variables\n", nvar, sizeof(conjugrad_float_t) * 8);
 /*
 		if(color) { printf("\x1b[1m"); }
@@ -695,6 +713,7 @@ int main(int argc, char **argv)
 		int ret;
 
 		conjugrad_float_t *d_x;
+//*
 		status = cudaMalloc((void **) &d_x, sizeof(conjugrad_float_t) * nvar_padded);
 		if (cudaSuccess != status) {
 			printf("CUDA error No. %d while allocation memory for d_x\n", status);
@@ -705,17 +724,17 @@ int main(int argc, char **argv)
 			printf("CUDA error No. %d while copying parameters to GPU\n", status);
 			exit(1);
 		}
-		ret = conjugrad_gpu(nvar_padded, d_x, &fx, evaluate, progress, ud, param);
+		ret = conjugrad_gpu(nvar_padded, d_x, &fx, evaluate, progress, ud, &dd, param);
 		status = cudaMemcpy(x, d_x, sizeof(conjugrad_float_t) * nvar_padded, cudaMemcpyDeviceToHost);
 		if (cudaSuccess != status) {
 			printf("CUDA error No. %d while copying parameters back to CPU\n", status);
 			exit(1);
 		}
-		status = cudaFree(d_x);
+		/*status = cudaFree(d_x);
 		if (cudaSuccess != status) {
 			printf("CUDA error No. %d while freeing memory for d_x\n", status);
 			exit(1);
-		}
+		}*/
 		exec_time[job] = seconds_since(&exec_timer);
 		
 		printf("\n %s with status code %d - ", (ret < 0 ? "Exit" : "Done"), ret);
@@ -729,22 +748,29 @@ int main(int argc, char **argv)
 		} else {
 			printf("Unknown status code!\n");
 		}
-
+//*/
 		printf("\nFinal fx = %f\n\n", fx);
 
-		destroy(ud);
+		status = cudaFree(d_x);
+		 if (cudaSuccess != status) {
+                        printf("CUDA error No. %d while freeing memory for d_x\n", status);
+                        exit(1);
+                }
+		destroy_cuda(&dd);
 		start_timer(&idle_timer);
+
  	} // end critical region
 #ifdef OPENMP
+	//#pragma omp barrier
                 #pragma omp atomic update
 #endif
 
                 total_exec_time += exec_time[job];
-       
+//*       
 	 // Post-processing ------
 		start_timer(&resulting_timer);
-                matfilename = resfile[job];
-		FILE* out = fopen(matfilename, "w");
+                //matfilename = resfile[job];
+		FILE* out = fopen(resfile[job], "w");
 		if(out == NULL) {
 			printf("Cannot open %s for writing!\n\n", matfilename);
 			//return 3;
@@ -794,7 +820,8 @@ int main(int argc, char **argv)
 		}
 
 		write_matrix(out, outmat, ncol, ncol);
-
+//*/
+/*
 #ifdef JANSSON
 		json_object_set(meta_results, "fx_final", json_real(fx));
 		json_object_set(meta_results, "num_iterations", json_integer(json_array_size(meta_steps)));
@@ -830,6 +857,7 @@ int main(int argc, char **argv)
 		}
 
 #endif
+*/
 	        result_time[job]=seconds_since(&resulting_timer);
 #ifdef OPENMP
 	         #pragma omp atomic update
@@ -842,11 +870,10 @@ int main(int argc, char **argv)
 		conjugrad_free(outmat);
 		conjugrad_free(x);
 		free(msa);
-	}//End of the for loop - Run over the list of files
-
 		conjugrad_free(ud->weights);
 		free(ud);
 		free(param);
+	}//End of the for loop - Run over the list of files
 	} // End of parallel section
 
 //Print the run time
@@ -857,9 +884,9 @@ int main(int argc, char **argv)
 	printf("\nProcessing time of entire job set (%d files): %.3f sec", nfiles, total_exec_time);
 	printf("\nResulting time of entire job set (%d files): %.3f sec", nfiles, total_resulting_time);
 	printf("\nRun time of entire job set (%d files): %.3f sec", nfiles, seconds_since(&time_start));
-	if((numthreads > 1) && use_filelist)	printf("\nSavings from multithreading: %.3f sec",(total_setup_time+total_resulting_time+total_exec_time) - seconds_since(&time_start));
+	if((numthreads > 1) && use_filelist)	printf("\nSavings from multithreading: %.3f sec ",(total_setup_time+total_resulting_time+total_exec_time) - seconds_since(&time_start));
 #endif
-
+	printf("\n");
 	//printf("Output can be found in %s\n", matfilename);
 
 	return 0;
