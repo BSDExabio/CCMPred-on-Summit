@@ -474,7 +474,6 @@ int main(int argc, char **argv)
 		#pragma omp for schedule(dynamic, 1)
 #endif
 	   for(unsigned int job=0; job <nfiles; job++){
-		//printf("\n Job %d is assigned to thread %d ", job, thread_id);
 		start_timer(&setup_timer);
         	FILE *msafile = fopen(file_list[job], "r");
         	if( msafile == NULL) {
@@ -592,7 +591,7 @@ int main(int argc, char **argv)
                         exit(-1);
                 }
 #endif
-		printf("\n Job %d process the sequence %d using thread %d and device %d \n", job, file_list[job], thread_id, dev);
+		printf("\n Job %d process the sequence %s using thread %d and device %d \n", job, file_list[job], thread_id, dev);
 /*
                 struct cudaDeviceProp prop;
 		cudaGetDeviceProperties(&prop, use_def_gpu);
@@ -640,7 +639,6 @@ int main(int argc, char **argv)
 
 #ifdef OPENMP
 //	#pragma omp critical
-//	#pragma omp barrier
 #endif
 	{
 
@@ -653,7 +651,7 @@ int main(int argc, char **argv)
 
        		devicedata dd; // = (devicedata *)malloc( sizeof(devicedata) );
 		init_cuda(nvar_padded, ud, &dd);
-/*
+
 #ifdef JANSSON
 		json_object_set(meta_parameters, "reweighting_threshold", json_real(ud->reweighting_threshold));
 		json_object_set(meta_parameters, "apc", json_boolean(use_apc));
@@ -701,7 +699,7 @@ int main(int argc, char **argv)
 
 #endif
 
-*/
+
 		printf("\nWill optimize %d %ld-bit variables\n", nvar, sizeof(conjugrad_float_t) * 8);
 /*
 		if(color) { printf("\x1b[1m"); }
@@ -821,7 +819,7 @@ int main(int argc, char **argv)
 
 		write_matrix(out, outmat, ncol, ncol);
 //*/
-/*
+
 #ifdef JANSSON
 		json_object_set(meta_results, "fx_final", json_real(fx));
 		json_object_set(meta_results, "num_iterations", json_integer(json_array_size(meta_steps)));
@@ -857,7 +855,7 @@ int main(int argc, char **argv)
 		}
 
 #endif
-*/
+
 	        result_time[job]=seconds_since(&resulting_timer);
 #ifdef OPENMP
 	         #pragma omp atomic update
@@ -880,11 +878,11 @@ int main(int argc, char **argv)
 
 #ifndef _WIN32
 	// Total time measurement
-	printf("\nSetup time of entire job set (%d files): %.3f sec", nfiles, total_setup_time);
-	printf("\nProcessing time of entire job set (%d files): %.3f sec", nfiles, total_exec_time);
-	printf("\nResulting time of entire job set (%d files): %.3f sec", nfiles, total_resulting_time);
+//	printf("\nSetup time of entire job set (%d files): %.3f sec", nfiles, total_setup_time);
+//	printf("\nProcessing time of entire job set (%d files): %.3f sec", nfiles, total_exec_time);
+//	printf("\nResulting time of entire job set (%d files): %.3f sec", nfiles, total_resulting_time);
 	printf("\nRun time of entire job set (%d files): %.3f sec", nfiles, seconds_since(&time_start));
-	if((numthreads > 1) && use_filelist)	printf("\nSavings from multithreading: %.3f sec ",(total_setup_time+total_resulting_time+total_exec_time) - seconds_since(&time_start));
+//	if((numthreads > 1) && use_filelist)	printf("\nSavings from multithreading: %.3f sec ",(total_setup_time+total_resulting_time+total_exec_time) - seconds_since(&time_start));
 #endif
 	printf("\n");
 	//printf("Output can be found in %s\n", matfilename);
