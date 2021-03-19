@@ -517,10 +517,10 @@ int main(int argc, char **argv)
 #ifdef OPENMP
 	  #pragma omp single
           {
-	  #pragma omp taskloop grainsize(1) 
+	  #pragma omp taskloop num_tasks(numtasks) //grainsize(1) 
 	  //#pragma omp for schedule(dynamic, 1)
 #endif
-	   for(unsigned int job=0; job <numtasks; job++){
+	   for(unsigned int job=0; job <nfiles; job++){
 		const int dev = gpu_scheduler_roundrobin(occupancies, job, num_devices);
 		//const int dev = gpu_scheduler(occupancies, num_devices);
 		printf("\n Job %d is assigned to thread %d ", job, thread_id);
@@ -585,6 +585,7 @@ int main(int argc, char **argv)
 
 		cudaError_t status;
 		status = cudaSetDevice(dev);
+		printf("\n Job %d process the sequence %s using thread %d and device %d \n", job, file_list[job], thread_id, dev);
         	setup_time[job] = seconds_since(&setup_timer);
 #ifdef OPENMP
 	#pragma omp atomic update
