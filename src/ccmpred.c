@@ -461,9 +461,6 @@ int main(int argc, char **argv)
                 int thread_id = 0;
 #endif
 
-
-       		//userdata *ud = (userdata *)malloc( sizeof(userdata) );
-        	//conjugrad_parameter_t *param = conjugrad_init();
 #ifndef _WIN32
                 struct timeval setup_timer, exec_timer,  resulting_timer;
 #else
@@ -543,7 +540,6 @@ int main(int argc, char **argv)
         	ud->nrow = nrow;
         	ud->nsingle = nsingle;
         	ud->nvar = nvar;
-        //	ud->nvar_padded = nvar_padded;
         	ud->lambda_single = lambda_single;
         	ud->lambda_pair = lambda_pair;
         	ud->weights = conjugrad_malloc(nrow);
@@ -633,14 +629,11 @@ int main(int argc, char **argv)
 */
         	setup_time[job] = seconds_since(&setup_timer);
 #ifdef OPENMP
-//	#pragma omp atomic update
+	#pragma omp atomic update
 #endif
 		total_setup_time += setup_time[job];
 
-#ifdef OPENMP
-//	#pragma omp critical
-#endif
-	{
+//------Critical Section
 
 		//printf("\nRunning Job #%d:\n", job);
 		idle_time[job] = seconds_since(&idle_timer);
@@ -711,7 +704,7 @@ int main(int argc, char **argv)
 		int ret;
 
 		conjugrad_float_t *d_x;
-//*
+
 		status = cudaMalloc((void **) &d_x, sizeof(conjugrad_float_t) * nvar_padded);
 		if (cudaSuccess != status) {
 			printf("CUDA error No. %d while allocation memory for d_x\n", status);
@@ -728,11 +721,7 @@ int main(int argc, char **argv)
 			printf("CUDA error No. %d while copying parameters back to CPU\n", status);
 			exit(1);
 		}
-		/*status = cudaFree(d_x);
-		if (cudaSuccess != status) {
-			printf("CUDA error No. %d while freeing memory for d_x\n", status);
-			exit(1);
-		}*/
+
 		exec_time[job] = seconds_since(&exec_timer);
 		
 		printf("\n %s with status code %d - ", (ret < 0 ? "Exit" : "Done"), ret);
@@ -746,7 +735,7 @@ int main(int argc, char **argv)
 		} else {
 			printf("Unknown status code!\n");
 		}
-//*/
+
 		printf("\nFinal fx = %f\n\n", fx);
 
 		status = cudaFree(d_x);
@@ -757,14 +746,13 @@ int main(int argc, char **argv)
 		destroy_cuda(&dd);
 		start_timer(&idle_timer);
 
- 	} // end critical region
+ 	 // end critical region
 #ifdef OPENMP
-	//#pragma omp barrier
                 #pragma omp atomic update
 #endif
 
                 total_exec_time += exec_time[job];
-//*       
+       
 	 // Post-processing ------
 		start_timer(&resulting_timer);
                 //matfilename = resfile[job];
@@ -818,7 +806,7 @@ int main(int argc, char **argv)
 		}
 
 		write_matrix(out, outmat, ncol, ncol);
-//*/
+
 
 #ifdef JANSSON
 		json_object_set(meta_results, "fx_final", json_real(fx));
