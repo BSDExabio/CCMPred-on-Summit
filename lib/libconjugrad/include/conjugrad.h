@@ -57,13 +57,30 @@ typedef struct {
 	conjugrad_float_t min_gnorm;    // Value for initial gnorm that will be considered already minimized
 } conjugrad_parameter_t;
 
+typedef struct devicedata{
+        unsigned char *d_msa;
+        unsigned char *d_msa_transposed;
+        conjugrad_float_t *d_precompiled;
+        conjugrad_float_t *d_precompiled_sum;
+        conjugrad_float_t *d_precompiled_norm;
+        conjugrad_float_t *d_histograms;
+        conjugrad_float_t *d_weights;
+        conjugrad_float_t *d_g;
+        conjugrad_float_t *d_s;
+} devicedata;
 
+typedef conjugrad_float_t (*conjugrad_evaluate_gpu_t)(
+	void *instance,
+	devicedata *d_instance,
+	const conjugrad_float_t *x,
+	const int n
+);
 
 typedef conjugrad_float_t (*conjugrad_evaluate_t)(
-	void *instance,
-	const conjugrad_float_t *x,
-	conjugrad_float_t *g,
-	const int n
+        void *instance,
+        const conjugrad_float_t *x,
+        conjugrad_float_t *g,
+        const int n
 );
 
 typedef int (*conjugrad_progress_t)(
@@ -83,9 +100,10 @@ int conjugrad_gpu(
 	int n,
 	conjugrad_float_t *d_x,
 	conjugrad_float_t *d_fx,
-	conjugrad_evaluate_t proc_evaluate,
+	conjugrad_evaluate_gpu_t proc_evaluate,
 	conjugrad_progress_t proc_progress,
 	void *instance,
+	devicedata *d_instance,
 	conjugrad_parameter_t *param
 );
 
@@ -99,34 +117,43 @@ int conjugrad(
 	conjugrad_parameter_t *param
 );
 
-int linesearch(
+int linesearch_gpu(
 	int n,
 	conjugrad_float_t *x,
 	conjugrad_float_t *fx,
-	conjugrad_float_t *g,
-	conjugrad_float_t *s,
 	conjugrad_float_t *alpha,
-	conjugrad_evaluate_t proc_evaluate,
+	conjugrad_evaluate_gpu_t proc_evaluate,
 	void *instance,
+	devicedata *d_instance,
 	conjugrad_parameter_t *param
+);
+
+int linesearch(
+        int n,
+        conjugrad_float_t *x,
+        conjugrad_float_t *fx,
+        conjugrad_float_t *g,
+        conjugrad_float_t *s,
+        conjugrad_float_t *alpha,
+        conjugrad_evaluate_t proc_evaluate,
+        void *instance,
+        conjugrad_parameter_t *param
 );
 
 conjugrad_parameter_t *conjugrad_init();
 conjugrad_float_t *conjugrad_malloc(int n);
 void conjugrad_free(conjugrad_float_t *x);
 
-
 void conjugrad_debug_numdiff(
-	int n,
-	conjugrad_float_t *x0,
-	int i,
-	conjugrad_evaluate_t proc_evaluate,
-	void *instance,
-	conjugrad_float_t epsilon,
-	bool have_extra_i,
-	int extra_i
+        int n,
+        conjugrad_float_t *x0,
+        int i,
+        conjugrad_evaluate_t proc_evaluate,
+        void *instance,
+        conjugrad_float_t epsilon,
+        bool have_extra_i,
+        int extra_i
 );
-
 
 enum {
 	CONJUGRAD_SUCCESS = 0,

@@ -64,6 +64,11 @@ typedef struct userdata {
 	 */
 	int nvar;
 
+        /**
+         * The number of variables padded     
+         */
+        int nvar_padded;
+
 	/**
 	 * Extra data for the actual evaluate implementation
 	 */
@@ -91,3 +96,14 @@ typedef struct userdata {
 	void *meta_steps;
 } userdata;
 
+/*
+typedef struct devicedata{
+	unsigned char *d_msa;
+	unsigned char *d_msa_transposed;
+	conjugrad_float_t *d_precompiled;
+	conjugrad_float_t *d_precompiled_sum;
+	conjugrad_float_t *d_precompiled_norm;
+	conjugrad_float_t *d_histograms;
+	conjugrad_float_t *d_weights;
+} devicedata;
+*/
