@@ -96,14 +96,27 @@ typedef struct userdata {
 	void *meta_steps;
 } userdata;
 
-/*
-typedef struct devicedata{
-	unsigned char *d_msa;
-	unsigned char *d_msa_transposed;
-	conjugrad_float_t *d_precompiled;
-	conjugrad_float_t *d_precompiled_sum;
-	conjugrad_float_t *d_precompiled_norm;
-	conjugrad_float_t *d_histograms;
-	conjugrad_float_t *d_weights;
-} devicedata;
-*/
+
+typedef struct gen_param{
+	char* rawfilename;
+#ifdef MSGPACK
+	char* msgpackfilename;
+#endif
+	char* filelistname;
+    	char* msafilename;
+    	char* matfilename;
+    	char* initfilename;
+	int use_apc;
+	int use_normalization;
+	int use_filelist;
+	int use_def_gpu;
+	unsigned int numthreads;
+	int numiter;
+	int conjugrad_k;
+	conjugrad_float_t lambda_single;
+	conjugrad_float_t lambda_pair;
+	conjugrad_float_t lambda_pair_factor;
+	conjugrad_float_t reweighting_threshold;
+	conjugrad_float_t conjugrad_eps;
+} gen_param;
+
