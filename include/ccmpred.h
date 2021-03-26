@@ -96,6 +96,9 @@ typedef struct userdata {
 	void *meta_steps;
 } userdata;
 
+/*
+ * General parameter, some can read from user 
+ */
 
 typedef struct gen_param{
 	char* rawfilename;

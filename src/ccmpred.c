@@ -247,6 +247,9 @@ void usage(char* exename, int long_usage) {
 	exit(1);
 }
 
+/*
+ * Initial setup, read msa file and compute relevant attributes/paramters
+ */
 
 int setup_msa(	char* msafile_name, 
 		unsigned char* msa, 
@@ -325,6 +328,10 @@ int setup_msa(	char* msafile_name,
         ud->reweighting_threshold = gp->reweighting_threshold;
 
 }
+
+/*
+ * Post processing, write the results in .mat file or user specific file format
+ */
 
 int process_result( char* resfile,
 		    conjugrad_float_t *x, 
@@ -406,6 +413,9 @@ int process_result( char* resfile,
 
 }
 
+/*
+ * Process the msa to identify protein residue-residue contacts
+ */
 
 int process_msa( userdata *ud,
                  conjugrad_parameter_t *param,
@@ -518,7 +528,16 @@ int process_msa( userdata *ud,
         destroy_cuda(&dd);
 }
 
-int setup_device(size_t mem_needed, int job, char* msafilename, int thread_id,  unsigned int dev, unsigned int num_devices)
+/*
+ * Setup device to accelerate the process and appropriate scheduling
+ */
+
+int setup_device( size_t mem_needed, 
+		  int job, 
+		  char* msafilename, 
+		  int thread_id,  
+		  unsigned int dev, 
+		  unsigned int num_devices)
 {
 #ifdef OPENMP
         dev = job%num_devices;
@@ -575,8 +594,13 @@ int setup_device(size_t mem_needed, int job, char* msafilename, int thread_id,  
 
 }
 
+/*
+ * Get values for parameters
+ */
     
-int get_parameter(int argc, char **argv, gen_param* gparam )
+int get_parameter( int argc, 
+		   char **argv, 
+		   gen_param* gparam )
 {
     gparam->rawfilename = NULL;
     gparam->filelistname = NULL;
