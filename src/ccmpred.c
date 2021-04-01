@@ -328,7 +328,8 @@ int setup_msa(	char* msafile_name,
         ud->lambda_pair = gp->lambda_pair;
         ud->weights = conjugrad_malloc(nrow);
         ud->reweighting_threshold = gp->reweighting_threshold;
-
+	
+	return 0;
 }
 
 /*
@@ -412,7 +413,8 @@ int process_result( char* resfile,
  	fflush(out);  
         fclose(out);
         conjugrad_free(outmat);
-
+	
+	return 0;
 }
 
 /*
@@ -528,6 +530,8 @@ int process_msa( userdata *ud,
                 exit(1);
         }
         destroy_cuda(&dd);
+
+	return 0;
 }
 
 /*
@@ -561,8 +565,8 @@ int setup_device( size_t mem_needed,
         printf("\n Job %d process the sequence %s using thread %d and device %d \n", job, msafilename, thread_id, dev);
 /*
         struct cudaDeviceProp prop;
-        cudaGetDeviceProperties(&prop, use_def_gpu);
-        printf("using device #%d: %s\n", use_def_gpu, prop.name);
+        cudaGetDeviceProperties(&prop, dev);
+        printf("using device #%d: %s\n", dev, prop.name);
         size_t mem_free, mem_total;
         status = cudaMemGetInfo(&mem_free, &mem_total);
         if(cudaSuccess != status) {
@@ -589,6 +593,7 @@ int setup_device( size_t mem_needed,
 #endif
 */
 
+	return 0;
 }
 
 /*
@@ -711,6 +716,8 @@ int get_parameter( int argc,
             }
                 free(thisOpt);
         }
+
+	return 0;
 }
 
 int main(int argc, char **argv)
@@ -742,7 +749,10 @@ int main(int argc, char **argv)
 */
 
 	gen_param *gp = (gen_param *)malloc( sizeof(gen_param) );	
-	get_parameter(argc, argv, gp);
+	if (get_parameter(argc, argv, gp) !=0 ){
+		printf("Failed to get parameters \n");
+		exit(1);
+	}
 	
 	char** file_list;
 	char** resfile;
@@ -823,12 +833,17 @@ int main(int argc, char **argv)
 #endif
 	   for(unsigned int job=0; job <nfiles; job++){
 		start_timer(&setup_timer);
+		// Setup:  read msafile and device setup
        		userdata *ud = (userdata *)malloc( sizeof(userdata) );
 		int nvar_padded = 0;
 		unsigned char* msa;
 		size_t mem_needed = 0;
 
-		setup_msa( file_list[job], msa, gp, ud, &nvar_padded, &mem_needed);
+		if (setup_msa( file_list[job], msa, gp, ud, &nvar_padded, &mem_needed) !=0 ){
+                	printf("Failed to setting up sequence \n");
+                	exit(1);
+	        }
+
 		conjugrad_float_t *x = conjugrad_malloc(nvar_padded);
         	if( x == NULL) {
                 	die("ERROR: Not enough memory to allocate variables!");
@@ -844,8 +859,13 @@ int main(int argc, char **argv)
         	param->alpha_mul = F05;
        	 	param->ftol = 1e-4;
 	        param->wolfe = F02;
+		
+		// Device setup - setting up a GPU from a pool of multi GPUs 
+		if ( setup_device(mem_needed, job, file_list[job], thread_id, gp->use_def_gpu, num_devices) !=0 ){
+                	printf("Failed to setting up device \n");
+        	        exit(1);
+	        }
 
-		setup_device(mem_needed, job, file_list[job], thread_id, gp->use_def_gpu, num_devices);
 		setup_time[job] = seconds_since(&setup_timer);
 #ifdef OPENMP
 	#pragma omp atomic update
@@ -854,7 +874,11 @@ int main(int argc, char **argv)
 
 		start_timer(&exec_timer);
 		// Process: Learning protein residue-residue contacts
-		process_msa(ud, param, gp, x, nvar_padded);
+		if ( process_msa(ud, param, gp, x, nvar_padded) !=0 ){
+                	printf("Failed to processing the sequence \n");
+        	        exit(1);
+	        }
+
 		exec_time[job] = seconds_since(&exec_timer);
 #ifdef OPENMP
                 #pragma omp atomic update
@@ -863,7 +887,11 @@ int main(int argc, char **argv)
        
 	 	// Result: writng results
 		start_timer(&resulting_timer); 
-		process_result(resfile[job], x, param, gp, ud->ncol );
+		if ( process_result(resfile[job], x, param, gp, ud->ncol )!=0 ){
+                        printf("Failed to processing the result \n");
+                        exit(1);
+                }
+
 	        result_time[job]=seconds_since(&resulting_timer);
 #ifdef OPENMP
 	         #pragma omp atomic update
