@@ -44,6 +44,88 @@
 #include <sys/time.h>
 #endif
 
+/*-----------------------
+ * Scheduling Techniques 
+ * -task2gpu scheduling strategies
+ -----------------------*/
+
+/*
+ * Schedule a task to a GPU
+ * - a GPU is chosen in round robin manner
+ */
+inline unsigned
+gpu_scheduler_rr(unsigned *occupancies, int taskID, int ngpus)
+{
+  const unsigned chosen = taskID % ngpus;
+  #pragma omp atomic
+  occupancies[chosen]++;
+  return chosen;
+}
+
+
+inline size_t 
+get_freegpumem(int device){
+  struct cudaDeviceProp prop;
+  cudaGetDeviceProperties(&prop, device);
+  //printf("using device #%d: %s\n", device, prop.name);
+  size_t mem_free, mem_total;
+  cudaError_t status = cudaMemGetInfo(&mem_free, &mem_total);
+  if(cudaSuccess != status) {
+       printf("Error getting memory info: %d\n", status);
+       exit(1);
+   }
+  return mem_free;
+
+}
+
+/*
+ * Schedule a task to a GPU based on dynamic load balancing (adaptive) scheduling
+ * - a GPU is chosen based on the work load assigned to GPUs  
+ */
+inline unsigned 
+gpu_scheduler_dynamic_lb(unsigned long *gpuLoad, int offset, int ngpus, int taskWeight)
+{
+  short looking = 1;
+  unsigned chosen;
+  size_t available_mem = 0;
+  while (looking) {
+    unsigned occ_i;
+    unsigned long load;
+    unsigned long min_load = ULLONG_MAX;
+    for (unsigned i = offset; i < offset+ngpus; i++) {
+         available_mem = get_freegpumem(i);
+         if ( taskWeight < available_mem ){
+              #pragma omp atomic read
+      	      load = gpuLoad[i];      
+              if ( load < min_load ){
+	           min_load = load; 
+    	           occ_i = i;
+              }
+         }
+    }
+        chosen = occ_i;
+#pragma omp atomic
+        gpuLoad[chosen] += taskWeight;
+        looking = 0;
+        break;
+  }
+  return chosen;
+}
+
+/*
+ * Multi-queue scheduling; a group of tasks can be mapped to a set of GPUs.
+ * - static selection of resource set (?)
+ * - based on the dynamic load balancing (adaptive) scheduling
+ * */
+inline unsigned
+gpu_scheduler_dynamic_mqlb(unsigned long *gpuLoad, int ngpus, int taskID, int taskWeight, int numQueues, int numTasks)
+{  
+  int queueID = (taskID*numQueues)/numTasks;
+  int ngpusPerQueue = ngpus/numQueues;
+  return gpu_scheduler_dynamic_lb(gpuLoad, queueID*ngpusPerQueue, ngpusPerQueue, taskWeight);
+}
+
+
 inline double seconds_since( struct timeval *time_start)
 {
 #ifndef _WIN32
@@ -541,11 +623,8 @@ int setup_device( size_t mem_needed,
 		  char* msafilename, 
 		  int thread_id,  
 		  unsigned int dev, 
-		  unsigned int num_devices)
+		  unsigned int num_devices )
 {
-#ifdef OPENMP
-        dev = job%num_devices;
-#endif
 	cudaError_t status;
         if(dev >= num_devices){
                 printf("Requested device %i does not avialable, only %i devices available. ", dev+1, num_devices);
@@ -729,7 +808,6 @@ int main(int argc, char **argv)
 	// Timer initializations
 #ifndef _WIN32
 	struct timeval time_start, idle_timer;
-	start_timer(&time_start);
 	start_timer(&idle_timer);
 #else
 	// Dummy variables if timers off
@@ -785,12 +863,14 @@ int main(int argc, char **argv)
 	logo(color);
         printf("\n number of files : %d \n", nfiles);
 
+        int numtasks = nfiles;
         int num_devices = 0;
-/*#ifdef OPENMP
-        num_devices = omp_get_num_devices() ; 
-        printf("Found %d CUDA devices, ", num_devices);
-#else
-*/
+//#ifdef OPENMP
+//        num_devices = omp_get_num_devices() ; 
+//        printf("Found %d CUDA devices, ", num_devices);
+
+//#else
+
         cudaError_t sts = cudaGetDeviceCount(&num_devices);
         if(sts != CUDA_SUCCESS) {
                printf("No CUDA devices available, ");
@@ -800,10 +880,21 @@ int main(int argc, char **argv)
         else {
                printf("Found %d CUDA devices, ", num_devices);
         }
-//#//endif
-        int numtasks = nfiles;
+//#endif
 
 #ifdef OPENMP
+       //  num_devices = omp_get_num_devices() ;  
+        printf("Found %d CUDA devices, ", num_devices);
+        int *devices = NULL;
+        devices = (int *) calloc(numtasks, sizeof(*devices));
+
+        unsigned *occupancies = NULL;
+        occupancies = (unsigned *) calloc(num_devices, sizeof(*occupancies));
+
+        unsigned long *gpuLoad = NULL;
+        gpuLoad  = (unsigned long*) calloc(num_devices, sizeof(*gpuLoad));
+    
+        int gs = 1;
         //omp_lock_t lock;
         //omp_init_lock(&lock);
 	//omp_set_num_threads(numthreads);
@@ -826,17 +917,23 @@ int main(int argc, char **argv)
 
 
 #ifndef _WIN32
-                struct timeval setup_timer, exec_timer,  resulting_timer;
+                //struct timeval setup_timer, exec_timer,  resulting_timer;
 #else
 //                double setup_timer, exec_timer, resulting_timer;
 #endif
 
 #ifdef OPENMP
-	 #pragma omp single nowait
+	 #pragma omp single
           {
-           #pragma omp taskloop num_tasks(numtasks) //grainsize(1) 
+	   start_timer(&time_start);
+           #pragma omp taskloop grainsize(gs) 
+           //#pragma omp taskloop num_tasks(numtasks) //grainsize(1) 
 #endif
 	   for(unsigned int job=0; job <nfiles; job++){
+
+	  //	#pragma omp task shared(file_list, gp, resfile)
+		{
+		struct timeval setup_timer;
 		start_timer(&setup_timer);
 		// Setup:  read msafile and device setup	
 		userdata *ud = (userdata *)malloc( sizeof(userdata) );
@@ -866,7 +963,16 @@ int main(int argc, char **argv)
         	}
 	        memset(x, 0, sizeof(conjugrad_float_t) * nvar_padded);
 		
-		// Device setup - setting up a GPU from a pool of multi GPUs 
+		// Device setup - setting up a GPU from a pool of multi GPUs
+		#ifdef OPENMP
+        	//gp->use_def_gpu = thread_id%num_devices;
+        	//Round robin scheduling
+        	// gp->use_def_gpu = gpu_scheduler_rr( occupancies, job, num_devices);
+        	//Adaptive scheduling
+         	gp->use_def_gpu = gpu_scheduler_dynamic_lb( gpuLoad, 0, num_devices, mem_needed);
+        	//Adaptive Multi-Q scheduling
+        	//gp->use_def_gpu = gpu_scheduler_dynamic_lb( gpuLoad, 0, num_devices, mem_needed);
+		#endif 
 		if ( setup_device(mem_needed, job, file_list[job], thread_id, gp->use_def_gpu, num_devices) !=0 ){
                 	printf("Failed to setting up device \n");
         	        exit(1);
@@ -877,7 +983,11 @@ int main(int argc, char **argv)
 	#pragma omp atomic update
 #endif
 		total_setup_time += setup_time[job];
-
+//		} // end for the setup task
+		
+//		#pragma omp task
+//		{
+		struct timeval exec_timer;
 		start_timer(&exec_timer);
 		// Process: Learning protein residue-residue contacts
 		if ( process_msa(ud, param, gp, x, nvar_padded) !=0 ){
@@ -889,8 +999,16 @@ int main(int argc, char **argv)
                 #pragma omp atomic update
 #endif
                 total_exec_time += exec_time[job];
-       
+  //     		} //end for the processing task
+
 	 	// Result: writng results
+//		#pragma omp task
+//		{
+//		#pragma omp atomic
+//		occupancies[gp->use_def_gpu]--;
+		#pragma omp atomic
+		gpuLoad[gp->use_def_gpu]--;
+		struct timeval resulting_timer;
 		start_timer(&resulting_timer); 
 	        if ( process_result(resfile[job], x, param, gp, ud->ncol )!=0 ){
                         printf("Failed to processing the result \n");
@@ -908,6 +1026,8 @@ int main(int argc, char **argv)
 		conjugrad_free(ud->weights);
 		free(ud);
 		free(param);
+		}// end for the post processing task
+
 	}//End of the for loop - Run over the list of files
 	}// End of the single
 	} // End of parallel section
